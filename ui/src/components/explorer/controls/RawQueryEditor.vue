@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, watch } from 'vue'
+import { ref, computed, shallowRef, watch, onBeforeUnmount } from 'vue'
 
 import * as monaco from 'monaco-editor'
 
@@ -24,6 +24,7 @@ import { useDark } from '@vueuse/core'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 
 import { getDefaultMonacoOptions } from '@/utils/monaco.js'
+import { attachClickHouseSql } from '@/utils/clickhouseSql.js'
 
 const emit = defineEmits(['change', 'submit'])
 const props = defineProps(['source', 'value'])
@@ -48,8 +49,15 @@ const theme = computed(() => {
 const code = ref(props.value)
 const editorRef = shallowRef()
 
+let detach = null
+onBeforeUnmount(() => detach?.())
+
 const handleMount = (editor) => {
     editorRef.value = editor
+    if (props.source.kind === 'clickhouse') {
+        const columns = Object.entries(props.source.columns || {}).map(([name, column]) => [name, column.type])
+        detach = attachClickHouseSql(editor, { prefix: 'SELECT 1 FROM t WHERE (', suffix: '\n)', columns })
+    }
     editor.updateOptions({ placeholder: props.source.generateRawQueryExample() })
     editor.addAction({
         id: 'submit',

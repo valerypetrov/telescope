@@ -61,7 +61,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Select } from 'primevue'
 import { useDark } from '@vueuse/core'
 import * as monaco from 'monaco-editor'
@@ -69,6 +69,7 @@ import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 
 import ErrorText from '@/components/common/ErrorText.vue'
 import { getDefaultMonacoOptions } from '@/utils/monaco.js'
+import { attachClickHouseSql } from '@/utils/clickhouseSql.js'
 import { GRANULARITIES } from '@/utils/dashboards.js'
 import { MACROS, rawSqlConnections } from '@/features/rawsql/service.js'
 
@@ -104,7 +105,11 @@ onMounted(async () => {
     if (props.chart.connection == null && connections.value.length) props.chart.connection = connections.value[0].id
 })
 
+let detach = null
+onBeforeUnmount(() => detach?.())
+
 const onMount = (editor) => {
+    detach = attachClickHouseSql(editor)
     contentHeight.value = editor.getContentHeight()
     editor.onDidContentSizeChange((e) => (contentHeight.value = e.contentHeight))
     editor.addAction({
