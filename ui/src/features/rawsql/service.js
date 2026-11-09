@@ -33,6 +33,8 @@ const request = async (url, method, body, signal) => {
 
 export const rawSqlConnections = () => request('ui/v1/rawsql/connections', 'GET')
 
+export const rawSqlSchema = (connection) => request(`ui/v1/rawsql/connections/${connection}/schema`, 'GET')
+
 export const runRawSql = (connection, body, signal, attribution) => {
     const qs = attribution ? `?${new URLSearchParams(attribution)}` : ''
     return request(`ui/v1/rawsql/connections/${connection}/query${qs}`, 'POST', body, signal)

@@ -191,10 +191,10 @@
             </div>
             <div
                 v-if="source.isRawQueryAllowed() && showRawQueryEditor"
-                class="mb-2"
+                class="mb-2 flex items-start gap-1"
                 data-testid="explorer-raw-query-editor"
             >
-                <IftaLabel>
+                <IftaLabel class="flex-1 min-w-0">
                     <RawQueryEditor
                         id="raw_query_editor"
                         @change="onRawQueryChange"
@@ -204,6 +204,12 @@
                     />
                     <label for="raw_query_editor">RAW query (SQL WHERE statement)</label>
                 </IftaLabel>
+                <FilterBuilder
+                    v-if="source.kind === 'clickhouse'"
+                    :source="source"
+                    :value="sourceControlsStore.rawQuery"
+                    @apply="onRawQueryChange"
+                />
             </div>
         </div>
     </div>
@@ -232,6 +238,7 @@ import ContextColumns from '@/components/explorer/controls/ContextColumns.vue'
 import ColumnsEditor from '@/components/explorer/controls/ColumnsEditor.vue'
 import QueryEditor from '@/components/explorer/controls/QueryEditor.vue'
 import RawQueryEditor from '@/components/explorer/controls/RawQueryEditor.vue'
+import FilterBuilder from '@/components/explorer/controls/FilterBuilder.vue'
 import SavedViews from '@/components/explorer/controls/saved_views/SavedViews.vue'
 import AddToDashboard from '@/components/dashboards/AddToDashboard.vue'
 import ControlsExtras from '@/components/explorer/controls/ControlsExtras.vue'

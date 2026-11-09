@@ -1199,8 +1199,16 @@ const canPreview = computed(() => !!form.value && chart.value.display !== 'text'
 const cleanChart = () => {
     const c = chart.value
     if (c.display === 'text') return { display: 'text', text: c.text || '' }
-    if (c.display === 'sql')
-        return { display: 'sql', connection: c.connection, sql: c.sql || '', granularity: c.granularity || 'auto' }
+    if (c.display === 'sql') {
+        const result = {
+            display: 'sql',
+            connection: c.connection,
+            sql: c.sql || '',
+            granularity: c.granularity || 'auto',
+        }
+        if (c.builder) result.builder = JSON.parse(JSON.stringify(c.builder))
+        return result
+    }
     if (isLogTile(c.display)) {
         const result = {
             source: c.source,
