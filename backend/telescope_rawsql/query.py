@@ -57,6 +57,12 @@ TABLE_MODIFIERS_RE = re.compile(r", (?:final|sample_size|sample_offset): .*$")
 MAX_SAFE_INT = 2**53 - 1
 WRAPPER_TOP = ["SelectWithUnionQuery (children 1)", " ExpressionList (children 1)"]
 FIRST_WORD_RE = re.compile(r"(?:\s+|--[^\n]*|/\*.*?\*/|\()*(\w*)", re.S)
+SCHEMA_SQL = (
+    "SELECT database, table, name, type FROM system.columns"
+    " WHERE (database, table) IN {tables:Array(Tuple(String, String))}"
+    " ORDER BY database, table, position"
+)
+SCHEMA_SETTINGS = {"readonly": 2, "max_execution_time": CHART_QUERY_TIMEOUT_SECONDS}
 
 
 class RawSqlError(Exception):
@@ -199,3 +205,23 @@ def run_raw_sql(
         "rows": [[json_value(v) for v in row] for row in rows[:RAW_SQL_MAX_ROWS]],
         "truncated": len(rows) > RAW_SQL_MAX_ROWS,
     }
+
+
+def table_schema(connection, tables: set):
+    """The columns of `tables` ("db.table"), read from system.columns on `connection`."""
+    pairs = sorted(tuple(name.split(".", 1)) for name in tables)
+    schema = {pair: [] for pair in pairs}
+    if pairs:
+        with ClickhouseConnect(connection.data) as c:
+            result = _client_query(
+                c.client,
+                SCHEMA_SQL,
+                parameters={"tables": pairs},
+                settings=SCHEMA_SETTINGS,
+            )
+        for database, table, name, type_ in result.result_rows:
+            schema[(database, table)].append({"name": name, "type": type_})
+    return [
+        {"database": database, "table": table, "columns": columns}
+        for (database, table), columns in schema.items()
+    ]

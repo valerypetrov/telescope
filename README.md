@@ -55,6 +55,7 @@ You can log in via GitHub to explore the core features of the system from an end
 - Combine series with formulas, compare with the previous period and format numbers by unit.
 - Filter a whole dashboard with **variables** (`$service`, `var-service=` in the URL).
 - Query ClickHouse directly in **raw SQL tiles**, available only to users holding the `raw_sql_user` role on the connection.
+- Build raw SQL tiles and Explorer SQL filters in the visual **query builder**: pick a table, columns or aggregates, filters, order and limit, and see the generated SQL, or switch to typing it.
 - Start from **templates** for services, Kubernetes, the ClickHouse system tables and the JVM, Go, Node.js, Python and .NET runtimes.
 - Share, favorite, export and import dashboards, show them in **kiosk mode**, and try a chart in the **chart explorer** before saving it.
 

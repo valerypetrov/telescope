@@ -1,3 +1,5 @@
+import json
+
 from rest_framework import serializers
 
 from telescope.fetchers.chart import GRANULARITIES, VARIABLE_NAME_RE
@@ -6,7 +8,11 @@ from telescope_otel.metrics_sql import metric_tables
 from telescope.rbac import permissions
 from telescope.rbac.manager import RBACManager
 from telescope.utils import parse_time
-from telescope_rawsql.query import RAW_SQL_DISPLAY, RAW_SQL_MAX_LENGTH
+from telescope_rawsql.query import (
+    RAW_SQL_DISPLAY,
+    RAW_SQL_MAX_LENGTH,
+    RAW_SQL_MAX_ROWS,
+)
 
 rbac_manager = RBACManager()
 
@@ -40,19 +46,103 @@ def raw_sql_tables(user, connection) -> set:
     return tables
 
 
-class RawSqlChartSerializer(serializers.Serializer):
+class _StrictSerializer(serializers.Serializer):
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            unknown = sorted(set(data) - set(self.fields))
+            if unknown:
+                raise serializers.ValidationError(
+                    {key: ["unknown key"] for key in unknown}
+                )
+        return super().to_internal_value(data)
+
+
+BUILDER_MAX_BYTES = 20000
+BUILDER_AGGS = ["count", "uniq", "sum", "avg", "min", "max", "quantile"]
+BUILDER_OPS = [
+    "=",
+    "!=",
+    "<",
+    "<=",
+    ">",
+    ">=",
+    "LIKE",
+    "NOT LIKE",
+    "IN",
+    "NOT IN",
+    "IS NULL",
+    "IS NOT NULL",
+]
+
+
+def _name(**kw):
+    return serializers.CharField(max_length=255, **kw)
+
+
+def _names(max_length):
+    return serializers.ListField(
+        child=_name(), required=False, default=list, max_length=max_length
+    )
+
+
+class BuilderAggregateSerializer(_StrictSerializer):
+    fn = serializers.ChoiceField(choices=BUILDER_AGGS)
+    column = _name(required=False, allow_blank=True, default="")
+    level = serializers.FloatField(required=False, min_value=0, max_value=1)
+    alias = _name(required=False, allow_blank=True, default="")
+
+
+class BuilderFilterSerializer(_StrictSerializer):
+    column = _name(allow_blank=True)
+    op = serializers.ChoiceField(choices=BUILDER_OPS)
+    value = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=1000
+    )
+
+
+class BuilderOrderSerializer(_StrictSerializer):
+    column = _name(allow_blank=True)
+    dir = serializers.ChoiceField(choices=["ASC", "DESC"])
+
+
+class RawSqlBuilderSerializer(_StrictSerializer):
+    """The query builder's form; it only reopens the builder, the tile runs `sql`."""
+
+    table = serializers.CharField(max_length=512, allow_blank=True)
+    mode = serializers.ChoiceField(choices=["rows", "aggregate"])
+    columns = _names(100)
+    aggregates = serializers.ListField(
+        child=BuilderAggregateSerializer(), required=False, default=list, max_length=20
+    )
+    group_by = _names(10)
+    time_bucket = _name(required=False, allow_blank=True, default="")
+    filters = serializers.ListField(
+        child=BuilderFilterSerializer(), required=False, default=list, max_length=20
+    )
+    time_filter = _name(required=False, allow_blank=True, default="")
+    order_by = serializers.ListField(
+        child=BuilderOrderSerializer(), required=False, default=list, max_length=5
+    )
+    limit = serializers.IntegerField(min_value=1, max_value=RAW_SQL_MAX_ROWS)
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Expected an object")
+        if len(json.dumps(data)) > BUILDER_MAX_BYTES:
+            raise serializers.ValidationError(
+                f"builder state is over {BUILDER_MAX_BYTES} bytes"
+            )
+        return super().to_internal_value(data)
+
+
+class RawSqlChartSerializer(_StrictSerializer):
     display = serializers.ChoiceField(choices=[RAW_SQL_DISPLAY])
     connection = serializers.IntegerField()
     sql = serializers.CharField(max_length=RAW_SQL_MAX_LENGTH)
     granularity = serializers.ChoiceField(
         choices=GRANULARITIES, required=False, default="auto"
     )
-
-    def to_internal_value(self, data):
-        unknown = sorted(set(data) - set(self.fields))
-        if unknown:
-            raise serializers.ValidationError({key: ["unknown key"] for key in unknown})
-        return super().to_internal_value(data)
+    builder = RawSqlBuilderSerializer(required=False)
 
 
 def raw_sql_tile_error(user, tile, old: set):

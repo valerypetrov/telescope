@@ -158,6 +158,17 @@ def test_tables_of_usable_sources_are_read(client, ch_connection, sql_user):
     )
 
 
+def test_schema_lists_columns_of_usable_tables(client, ch_connection, sql_user):
+    source_on(ch_connection, sql_user, "qb-tables", "system", "tables")
+    source_on(ch_connection, sql_user, "qb-viewer", "system", "columns", role="viewer")
+    response = client.get(f"/ui/v1/rawsql/connections/{ch_connection.pk}/schema")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [(t["database"], t["table"]) for t in data] == [("system", "tables")]
+    columns = {c["name"]: c["type"] for c in data[0]["columns"]}
+    assert columns["database"] == "String" and columns["name"] == "String"
+
+
 def test_comments_are_not_statements(client, ch_connection):
     assert rows(client, ch_connection, "SELECT * FROM numbers(1) /* ; */") == [[0]]
     assert rows(client, ch_connection, "SELECT 1 /* /* ; */ ; */ -- ;") == [[1]]
